@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visor Satelital - Gestión de Movilidad</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --bg-body: #090B0F;
+            --bg-panel: #13171F;
+            --bg-card: #1C222D;
+            --bg-card-hover: #252D3A;
+            --border-color: #2D3748;
+            --text-main: #F3F4F6;
+            --text-muted: #9CA3AF;
+            
+            --c-ejecutado: #10B981; /* Verde */
+            --c-propuesta: #F59E0B; /* Naranja */
+            --c-accent: #3B82F6;
+            
+            --sidebar-width: 380px;
+        }
+
+        * { box-sizing: border-box; }
+
+        body, html { 
+            margin: 0; padding: 0; height: 100%; 
+            font-family: 'Inter', sans-serif; 
+            background: var(--bg-body); color: var(--text-main); 
+            overflow: hidden; 
+        }
+
+        .app-container { display: flex; flex-direction: column; height: 100vh; }
+
+        /* HEADER & TOP BAR FILTERS */
+        .header {
+            height: 70px; background: var(--bg-panel); display: flex; align-items: center; 
+            padding: 0 24px; border-bottom: 1px solid var(--border-color); 
+            z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.5); justify-content: space-between;
+        }
+        .header-title { display: flex; align-items: center; gap: 10px; }
+        .header h1 { font-size: 16px; margin: 0; font-weight: 700; letter-spacing: 1px; color: #fff; }
+        .header h1 i { color: var(--c-accent); }
+
+        .top-filters { display: flex; gap: 15px; align-items: center; }
+        .filter-group { display: flex; align-items: center; gap: 8px; }
+        .filter-group label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; }
+        
+        select.dropdown-filter {
+            background: var(--bg-body); color: #fff; border: 1px solid var(--border-color);
+            padding: 8px 12px; border-radius: 6px; font-family: 'Inter', sans-serif; font-size: 13px;
+            outline: none; cursor: pointer; min-width: 180px;
+        }
+        select.dropdown-filter:focus { border-color: var(--c-accent); }
+
+        .main-content { display: flex; flex: 1; overflow: hidden; }
+
+        /* SIDEBAR */
+        .sidebar { 
+            width: var(--sidebar-width); background: var(--bg-panel); 
+            border-right: 1px solid var(--border-color); display: flex; 
+            flex-direction: column; z-index: 10;
+        }
+
+        /* KPIs */
+        .kpi-section { padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; border-bottom: 1px solid var(--border-color); }
+        .kpi-box { padding: 16px; border-radius: 8px; background: var(--bg-card); position: relative; overflow: hidden; }
+        .kpi-box::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; }
+        .kpi-box.ejec::before { background: var(--c-ejecutado); }
+        .kpi-box.prop::before { background: var(--c-propuesta); }
+        .kpi-box small { font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; display: block; margin-bottom: 8px; }
+        .kpi-box span { font-size: 22px; font-weight: 700; }
+        .kpi-box span.unit { font-size: 14px; font-weight: 500; color: var(--text-muted); }
+
+        /* BUSCADOR */
+        .search-container { padding: 15px 20px; border-bottom: 1px solid var(--border-color); background: var(--bg-body); }
+        .search-box { 
+            background: var(--bg-panel); border-radius: 6px; padding: 10px 14px; 
+            display: flex; align-items: center; gap: 10px; border: 1px solid var(--border-color); 
+        }
+        .search-box input { background: transparent; border: none; color: #fff; width: 100%; outline: none; font-size: 13px; font-family: inherit; }
+
+        /* LISTA DE PROYECTOS */
+        .project-list { flex: 1; overflow-y: auto; padding: 15px 20px; }
+        .project-list::-webkit-scrollbar { width: 6px; }
+        .project-list::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
+        
+        .project-item {
+            padding: 14px; border-radius: 8px; margin-bottom: 10px; background: var(--bg-card); 
+            cursor: pointer; transition: all 0.2s ease; border-left: 4px solid transparent;
+        }
+        .project-item:hover { background: var(--bg-card-hover); transform: translateX(2px); }
+        .project-item h3 { margin: 0 0 8px 0; font-size: 13px; font-weight: 600; line-height: 1.4; }
+        
+        .badges-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .badge { font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 4px; background: rgba(255,255,255,0.1); }
+        
+        .project-item p { margin: 0; font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+        .m2-text { color: #fff; font-weight: 600; }
+
+        /* MAPA */
+        .map-area { flex: 1; position: relative; }
+        #map { height: 100%; width: 100%; background: #000; }
+
+        /* POPUPS CUSTOM */
+        .leaflet-popup-content-wrapper { background: var(--bg-card) !important; color: var(--text-main) !important; border: 1px solid var(--border-color); border-radius: 8px; }
+        .leaflet-popup-tip { background: var(--bg-card) !important; }
+        .leaflet-popup-content { margin: 15px; font-family: 'Inter', sans-serif; }
+        .popup-title { font-size: 14px; font-weight: 700; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); }
+        .popup-row { font-size: 12px; margin-bottom: 4px; color: var(--text-muted); }
+        .popup-row span { color: #fff; font-weight: 500; }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <header class="header">
+            <div class="header-title">
+                <h1><i class="fas fa-satellite"></i> MOVILIDAD | VISOR SATELITAL</h1>
+            </div>
+            <div class="top-filters">
+                <div class="filter-group">
+                    <label for="filterEstado">Estado:</label>
+                    <select id="filterEstado" class="dropdown-filter">
+                        <option value="ALL">Todos los Estados</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filterTipo">Tipo de Obra:</label>
+                    <select id="filterTipo" class="dropdown-filter">
+                        <option value="ALL">Todos los Tipos</option>
+                    </select>
+                </div>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <aside class="sidebar">
+                <div class="kpi-section">
+                    <div class="kpi-box ejec">
+                        <small>M² Ejecutados</small>
+                        <span id="kpiEjec" style="color: var(--c-ejecutado);">0</span> <span class="unit">m²</span>
+                    </div>
+                    <div class="kpi-box prop">
+                        <small>M² Propuestos</small>
+                        <span id="kpiProp" style="color: var(--c-propuesta);">0</span> <span class="unit">m²</span>
+                    </div>
+                </div>
+
+                <div class="search-container">
+                    <div class="search-box">
+                        <i class="fas fa-search" style="color: var(--text-muted)"></i>
+                        <input type="text" id="projectSearch" placeholder="Buscar proyecto o calle...">
+                    </div>
+                </div>
+
+                <div class="project-list" id="projectList">
+                    <div style="text-align: center; color: var(--text-muted); font-size: 13px; margin-top: 30px;">
+                        <i class="fas fa-circle-notch fa-spin"></i> Cargando servidor satelital...
+                    </div>
+                </div>
+            </aside>
+
+            <main class="map-area">
+                <div id="map"></div>
+            </main>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <script>
+        // 1. Inicializar Mapa
+        const map = L.map('map', { zoomControl: false }).setView([-34.5424, -58.7131], 13);
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: '&copy; Esri'
+        }).addTo(map);
+
+        const mapLayerGroup = L.layerGroup().addTo(map);
+        
+        // Variables Globales
+        let allProjects = [];
+        let uniqueTipos = new Set();
+        let uniqueEstados = new Set();
+        
+        // Paleta de colores dinámica para tipos únicos
+        const colorPalette = ["#00E5FF", "#FFD600", "#F50057", "#D500F9", "#00E676", "#FF6D00", "#2979FF", "#FF3D00"];
+        let typeColorMap = {};
+        let colorCounter = 0;
+
+        const csvUrl = 'https://docs.google.com/spreadsheets/d/1Jf25xWdLr6wXvl0dSCvoq4josPGDNIWzPLcvQ_vb4ng/export?format=csv&gid=0';
+
+        // Utilidad para limpiar y parsear los M2 (Columna D)
+        function parseM2(val) {
+            if (!val) return 0;
+            let s = val.toString().trim();
+            // Si tiene coma pero no punto, cambiamos la coma por punto para parsearlo bien.
+            if (s.includes(',') && !s.includes('.')) {
+                s = s.replace(',', '.');
+            }
+            return parseFloat(s) || 0;
+        }
+
+        function parseCoords(str) {
+            if (!str || typeof str !== 'string') return null;
+            const parts = str.replace(/"/g, '').split(',');
+            if (parts.length < 2) return null;
+            const lat = parseFloat(parts[0].trim());
+            const lng = parseFloat(parts[1].trim());
+            return (!isNaN(lat) && !isNaN(lng)) ? [lat, lng] : null;
+        }
+
+        // 2. Cargar y Procesar CSV
+        Papa.parse(csvUrl, {
+            download: true, header: false, skipEmptyLines: true,
+            complete: (res) => {
+                res.data.forEach((row, index) => {
+                    if (index === 0) return; // Ignorar cabecera
+                    
+                    const proyecto = (row[2] || "Sin Nombre").trim();
+                    if(proyecto === "Sin Nombre" && !row[11] && !row[13]) return; 
+
+                    // Lectura DINÁMICA de columnas
+                    let tipo = (row[1] || "Sin Especificar").trim();
+                    let estado = (row[7] || "Sin Especificar").trim();
+                    
+                    // Aseguramos mayúscula inicial para que se vea limpio
+                    tipo = tipo.charAt(0).toUpperCase() + tipo.slice(1);
+                    estado = estado.charAt(0).toUpperCase() + estado.slice(1);
+
+                    // Columna D es el índice 3
+                    const m2 = parseM2(row[3]); 
+                    
+                    // Guardamos los valores únicos para los dropdowns
+                    uniqueTipos.add(tipo);
+                    uniqueEstados.add(estado);
+
+                    // Asignamos color dinámico al tipo si no lo tiene
+                    if (!typeColorMap[tipo]) {
+                        typeColorMap[tipo] = colorPalette[colorCounter % colorPalette.length];
+                        colorCounter++;
+                    }
+
+                    allProjects.push({
+                        id: index,
+                        proyecto: proyecto,
+                        tipo: tipo,
+                        estado: estado,
+                        m2: m2,
+                        puntoCentral: parseCoords(row[11]),
+                        inicio: parseCoords(row[13]),
+                        fin: parseCoords(row[14]),
+                        color: typeColorMap[tipo]
+                    });
+                });
+
+                populateDropdowns();
+                renderUI();
+            }
+        });
+
+        // 3. Llenar Menús Desplegables
+        function populateDropdowns() {
+            const selTipo = document.getElementById('filterTipo');
+            const selEstado = document.getElementById('filterEstado');
+
+            // Ordenar alfabéticamente
+            Array.from(uniqueTipos).sort().forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t; opt.innerText = t;
+                selTipo.appendChild(opt);
+            });
+
+            Array.from(uniqueEstados).sort().forEach(e => {
+                const opt = document.createElement('option');
+                opt.value = e; opt.innerText = e;
+                selEstado.appendChild(opt);
+            });
+        }
+
+        // 4. Renderizar Interfaz (Mapa, Lista y KPIs)
+        function renderUI() {
+            mapLayerGroup.clearLayers();
+            const listContainer = document.getElementById('projectList');
+            listContainer.innerHTML = '';
+            
+            let totalEjecutado = 0;
+            let totalPropuesto = 0;
+            
+            const term = document.getElementById('projectSearch').value.toLowerCase();
+            const valEstado = document.getElementById('filterEstado').value;
+            const valTipo = document.getElementById('filterTipo').value;
+
+            allProjects.forEach(proj => {
+                // Aplicar Filtros
+                if (valEstado !== "ALL" && proj.estado !== valEstado) return;
+                if (valTipo !== "ALL" && proj.tipo !== valTipo) return;
+                if (term && !proj.proyecto.toLowerCase().includes(term)) return;
+
+                // Sumar M2 exactos de la Columna D según la palabra clave del estado
+                if (proj.estado.toLowerCase().includes("ejecutado")) {
+                    totalEjecutado += proj.m2;
+                } else {
+                    totalPropuesto += proj.m2; // Todo lo que no sea 'Ejecutado' va al otro contador
+                }
+
+                // Dibujar en el Mapa
+                const isEjec = proj.estado.toLowerCase().includes("ejecutado");
+                const mapStyle = {
+                    color: proj.color, 
+                    weight: 8, 
+                    opacity: isEjec ? 1 : 0.6,
+                    dashArray: isEjec ? null : '8, 8', 
+                    fillColor: proj.color, 
+                    fillOpacity: isEjec ? 0.9 : 0.5, 
+                    radius: 8
+                };
+
+                let mapLayer = null;
+                if (proj.puntoCentral) {
+                    mapLayer = L.circleMarker(proj.puntoCentral, mapStyle);
+                } else if (proj.inicio && proj.fin) {
+                    mapLayer = L.polyline([proj.inicio, proj.fin], mapStyle);
+                }
+
+                if (mapLayer) {
+                    mapLayer.addTo(mapLayerGroup);
+                    
+                    const popupHTML = `
+                        <div class="popup-title" style="color: ${proj.color}">${proj.proyecto}</div>
+                        <div class="popup-row">Tipo: <span>${proj.tipo}</span></div>
+                        <div class="popup-row">Estado: <span>${proj.estado}</span></div>
+                        <div class="popup-row">M2 Totales: <span>${proj.m2.toFixed(2)}</span></div>
+                    `;
+                    mapLayer.bindPopup(popupHTML);
+
+                    // Agregar a la Lista Lateral
+                    const div = document.createElement('div');
+                    div.className = 'project-item';
+                    div.style.borderLeftColor = proj.color;
+                    
+                    div.innerHTML = `
+                        <div class="badges-row">
+                            <span style="font-size: 11px; color: ${proj.color}; font-weight: 600;">
+                                ${proj.tipo}
+                            </span>
+                            <span class="badge">${proj.estado}</span>
+                        </div>
+                        <h3 title="${proj.proyecto}">${proj.proyecto.length > 40 ? proj.proyecto.substring(0,40)+'...' : proj.proyecto}</h3>
+                        <p>Total M2: <span class="m2-text">${proj.m2.toFixed(2)}</span></p>
+                    `;
+                    
+                    div.onclick = () => {
+                        if (proj.puntoCentral) map.flyTo(proj.puntoCentral, 18);
+                        else map.flyToBounds([proj.inicio, proj.fin], {padding: [50,50], maxZoom: 18});
+                        setTimeout(() => mapLayer.openPopup(), 400);
+                    };
+                    
+                    listContainer.appendChild(div);
+                }
+            });
+
+            // Actualizar Tarjetas KPI (Suma estricta de Columna D)
+            // Se usa toLocaleString para separar los miles y decimales
+            document.getElementById('kpiEjec').innerText = totalEjecutado.toLocaleString('es-AR', {minimumFractionDigits: 1, maximumFractionDigits: 2});
+            document.getElementById('kpiProp').innerText = totalPropuesto.toLocaleString('es-AR', {minimumFractionDigits: 1, maximumFractionDigits: 2});
+
+            if (listContainer.innerHTML === '') {
+                listContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); font-size: 13px; margin-top: 30px;">No se encontraron resultados.</div>';
+            }
+        }
+
+        // 5. Eventos de Cambio
+        document.getElementById('filterEstado').addEventListener('change', renderUI);
+        document.getElementById('filterTipo').addEventListener('change', renderUI);
+        document.getElementById('projectSearch').addEventListener('input', renderUI);
+
+    </script>
+</body>
+</html>
