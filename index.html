@@ -224,19 +224,19 @@
                 res.data.forEach((row, index) => {
                     if (index === 0) return; // Ignorar cabecera
                     
-                    const proyecto = (row[2] || "Sin Nombre").trim();
-                    if(proyecto === "Sin Nombre" && !row[11] && !row[13]) return; 
+                    const proyecto = (row[3] || "Sin Nombre").trim();
+                    if(proyecto === "Sin Nombre" && !row[12] && !row[14]) return; 
 
                     // Lectura DINÁMICA de columnas
-                    let tipo = (row[1] || "Sin Especificar").trim();
-                    let estado = (row[7] || "Sin Especificar").trim();
+                    let tipo = (row[2] || "Sin Especificar").trim();
+                    let estado = (row[8] || "Sin Especificar").trim();
                     
                     // Aseguramos mayúscula inicial para que se vea limpio
                     tipo = tipo.charAt(0).toUpperCase() + tipo.slice(1);
                     estado = estado.charAt(0).toUpperCase() + estado.slice(1);
 
-                    // Columna D es el índice 3
-                    const m2 = parseM2(row[3]); 
+                    // Columna E es el índice 4
+                    const m2 = parseM2(row[4]); 
                     
                     // Guardamos los valores únicos para los dropdowns
                     uniqueTipos.add(tipo);
@@ -254,9 +254,9 @@
                         tipo: tipo,
                         estado: estado,
                         m2: m2,
-                        puntoCentral: parseCoords(row[11]),
-                        inicio: parseCoords(row[13]),
-                        fin: parseCoords(row[14]),
+                        puntoCentral: parseCoords(row[12]),
+                        inicio: parseCoords(row[14]),
+                        fin: parseCoords(row[15]),
                         color: typeColorMap[tipo]
                     });
                 });
