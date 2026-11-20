@@ -39,22 +39,22 @@
 
         /* HEADER & TOP BAR FILTERS */
         .header {
-            height: 70px; background: var(--bg-panel); display: flex; align-items: center; 
-            padding: 0 24px; border-bottom: 1px solid var(--border-color); 
+            min-height: 70px; background: var(--bg-panel); display: flex; align-items: center; flex-wrap: wrap;
+            padding: 10px 24px; border-bottom: 1px solid var(--border-color); gap: 12px;
             z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.5); justify-content: space-between;
         }
         .header-title { display: flex; align-items: center; gap: 10px; }
         .header h1 { font-size: 16px; margin: 0; font-weight: 700; letter-spacing: 1px; color: #fff; }
         .header h1 i { color: var(--c-accent); }
 
-        .top-filters { display: flex; gap: 15px; align-items: center; }
+        .top-filters { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
         .filter-group { display: flex; align-items: center; gap: 8px; }
-        .filter-group label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; }
+        .filter-group label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; white-space: nowrap; }
         
         select.dropdown-filter {
             background: var(--bg-body); color: #fff; border: 1px solid var(--border-color);
             padding: 8px 12px; border-radius: 6px; font-family: 'Inter', sans-serif; font-size: 13px;
-            outline: none; cursor: pointer; min-width: 180px;
+            outline: none; cursor: pointer; min-width: 145px;
         }
         select.dropdown-filter:focus { border-color: var(--c-accent); }
 
@@ -136,6 +136,18 @@
                         <option value="ALL">Todos los Tipos</option>
                     </select>
                 </div>
+                <div class="filter-group">
+                    <label for="filterAnio">Año de Ejecución:</label>
+                    <select id="filterAnio" class="dropdown-filter">
+                        <option value="ALL">Todos los Años</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filterOC">OCs:</label>
+                    <select id="filterOC" class="dropdown-filter">
+                        <option value="ALL">Todas las OCs</option>
+                    </select>
+                </div>
             </div>
         </header>
 
@@ -189,6 +201,8 @@
         let allProjects = [];
         let uniqueTipos = new Set();
         let uniqueEstados = new Set();
+        let uniqueAnios = new Set();
+        let uniqueOCs = new Set();
         
         // Paleta de colores dinámica para tipos únicos
         const colorPalette = ["#00E5FF", "#FFD600", "#F50057", "#D500F9", "#00E676", "#FF6D00", "#2979FF", "#FF3D00"];
@@ -206,6 +220,17 @@
                 s = s.replace(',', '.');
             }
             return parseFloat(s) || 0;
+        }
+
+        function parseAnio(fechaStr) {
+            if (!fechaStr || typeof fechaStr !== 'string') return "Sin Especificar";
+            const s = fechaStr.trim();
+            if (!s) return "Sin Especificar";
+            const match = s.match(/\b(20\d{2}|19\d{2})\b/);
+            if (match) return match[1];
+            const parts = s.split(/[\/\-]/);
+            const last = parts[parts.length - 1].trim();
+            return /^\d{4}$/.test(last) ? last : "Sin Especificar";
         }
 
         function parseCoords(str) {
@@ -237,10 +262,16 @@
 
                     // Columna E es el índice 4
                     const m2 = parseM2(row[4]); 
+                    // Columna K (índice 10): Fecha de Ejecución -> Año
+                    const anio = parseAnio(row[10]);
+                    // Columna N (índice 13): OC
+                    const oc = (row[13] || "").trim() || "Sin Especificar";
                     
                     // Guardamos los valores únicos para los dropdowns
                     uniqueTipos.add(tipo);
                     uniqueEstados.add(estado);
+                    uniqueAnios.add(anio);
+                    uniqueOCs.add(oc);
 
                     // Asignamos color dinámico al tipo si no lo tiene
                     if (!typeColorMap[tipo]) {
@@ -253,6 +284,8 @@
                         proyecto: proyecto,
                         tipo: tipo,
                         estado: estado,
+                        anio: anio,
+                        oc: oc,
                         m2: m2,
                         puntoCentral: parseCoords(row[12]),
                         inicio: parseCoords(row[14]),
@@ -270,6 +303,8 @@
         function populateDropdowns() {
             const selTipo = document.getElementById('filterTipo');
             const selEstado = document.getElementById('filterEstado');
+            const selAnio = document.getElementById('filterAnio');
+            const selOC = document.getElementById('filterOC');
 
             // Ordenar alfabéticamente
             Array.from(uniqueTipos).sort().forEach(t => {
@@ -282,6 +317,28 @@
                 const opt = document.createElement('option');
                 opt.value = e; opt.innerText = e;
                 selEstado.appendChild(opt);
+            });
+
+            // Ordenar años de más reciente a más antiguo, dejando "Sin Especificar" al final
+            Array.from(uniqueAnios).sort((a, b) => {
+                if (a === "Sin Especificar") return 1;
+                if (b === "Sin Especificar") return -1;
+                return b.localeCompare(a, 'es', { numeric: true });
+            }).forEach(a => {
+                const opt = document.createElement('option');
+                opt.value = a; opt.innerText = a;
+                selAnio.appendChild(opt);
+            });
+
+            // Ordenar OCs numérica/alfabéticamente, dejando "Sin Especificar" al final
+            Array.from(uniqueOCs).sort((a, b) => {
+                if (a === "Sin Especificar") return 1;
+                if (b === "Sin Especificar") return -1;
+                return a.localeCompare(b, 'es', { numeric: true });
+            }).forEach(o => {
+                const opt = document.createElement('option');
+                opt.value = o; opt.innerText = o;
+                selOC.appendChild(opt);
             });
         }
 
@@ -297,11 +354,15 @@
             const term = document.getElementById('projectSearch').value.toLowerCase();
             const valEstado = document.getElementById('filterEstado').value;
             const valTipo = document.getElementById('filterTipo').value;
+            const valAnio = document.getElementById('filterAnio').value;
+            const valOC = document.getElementById('filterOC').value;
 
             allProjects.forEach(proj => {
                 // Aplicar Filtros
                 if (valEstado !== "ALL" && proj.estado !== valEstado) return;
                 if (valTipo !== "ALL" && proj.tipo !== valTipo) return;
+                if (valAnio !== "ALL" && proj.anio !== valAnio) return;
+                if (valOC !== "ALL" && proj.oc !== valOC) return;
                 if (term && !proj.proyecto.toLowerCase().includes(term)) return;
 
                 // Sumar M2 exactos de la Columna D según la palabra clave del estado
@@ -337,6 +398,8 @@
                         <div class="popup-title" style="color: ${proj.color}">${proj.proyecto}</div>
                         <div class="popup-row">Tipo: <span>${proj.tipo}</span></div>
                         <div class="popup-row">Estado: <span>${proj.estado}</span></div>
+                        <div class="popup-row">Año de Ejecución: <span>${proj.anio}</span></div>
+                        <div class="popup-row">OC: <span>${proj.oc}</span></div>
                         <div class="popup-row">M2 Totales: <span>${proj.m2.toFixed(2)}</span></div>
                     `;
                     mapLayer.bindPopup(popupHTML);
@@ -380,6 +443,8 @@
         // 5. Eventos de Cambio
         document.getElementById('filterEstado').addEventListener('change', renderUI);
         document.getElementById('filterTipo').addEventListener('change', renderUI);
+        document.getElementById('filterAnio').addEventListener('change', renderUI);
+        document.getElementById('filterOC').addEventListener('change', renderUI);
         document.getElementById('projectSearch').addEventListener('input', renderUI);
 
     </script>
